@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Table with Pagination and Navigation</title>
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        table, th, td {
+            border: 1px solid black;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+        }
+        .pagination {
+            margin: 20px 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .pagination button {
+            margin: 0 5px;
+            padding: 10px;
+            cursor: pointer;
+        }
+        .pagination button.disabled {
+            cursor: not-allowed;
+            background-color: #e0e0e0;
+        }
+        nav {
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        nav a {
+            margin: 0 15px;
+            text-decoration: none;
+            padding: 10px;
+            background-color: #007bff;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        nav a.active {
+            background-color: #0056b3;
+        }
+        .page-input {
+            width: 50px;
+            text-align: center;
+            margin: 0 5px;
+        }
+        .rows-input {
+            width: 60px;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<h1 style="text-align: center;">Scrape Data</h1>
+
+<!-- Navigation Menu -->
+<nav>
+    <a id="dashboard-data" class="active">Dashboard Data</a>
+    <a id="company-data">Company Data</a>
+    <a id="transport-data">Transport Data</a>
+</nav>
+
+<table id="data-table">
+    <thead id="table-head">
+        <!-- Headers will be inserted here dynamically -->
+    </thead>
+    <tbody id="table-body">
+        <!-- Data will be inserted here dynamically -->
+    </tbody>
+</table>
+
+<div class="pagination">
+    <button id="prev-btn" class="disabled">Previous</button>
+    <span>Page </span>
+    <input id="page-input" class="page-input" type="number" min="1" value="1">
+    <span id="page-info"></span>
+    <button id="go-btn">Go</button>
+    <button id="next-btn">Next</button>
+    <span>Rows per page: </span>
+    <input id="rows-input" class="rows-input" type="number" min="1" value="12">
+</div>
+
+<script>
+    let rowsPerPage = 12;  // Default value, but now can be changed by the user
+    let currentPage = 1;
+    let data = [];
+    let currentEndpoint = '/dashboard/all';  // Default to dashboard data
+
+    document.addEventListener("DOMContentLoaded", function() {
+        const prevBtn = document.getElementById('prev-btn');
+        const nextBtn = document.getElementById('next-btn');
+        const pageInfo = document.getElementById('page-info');
+        const pageInput = document.getElementById('page-input');
+        const goBtn = document.getElementById('go-btn');
+        const rowsInput = document.getElementById('rows-input');
+
+        // Add event listeners to navigation menu
+        document.getElementById('dashboard-data').addEventListener('click', () => {
+            loadData('/dashboard/all', 'dashboard-data');
+        });
+        document.getElementById('company-data').addEventListener('click', () => {
+            loadData('/dashboard/company', 'company-data');
+        });
+        document.getElementById('transport-data').addEventListener('click', () => {
+            loadData('/dashboard/transport', 'transport-data');
+        });
+
+        // Function to load data from the given endpoint and update the table
+        function loadData(endpoint, activeTab) {
+            currentPage = 1;  // Reset to the first page on data switch
+            currentEndpoint = endpoint;
+
+            // Toggle active class in the navigation
+            document.querySelectorAll('nav a').forEach(link => link.classList.remove('active'));
+            document.getElementById(activeTab).classList.add('active');
+
+            // Fetch data from the specified endpoint
+            fetch(endpoint)
+                .then(response => response.json())
+                .then(fetchedData => {
+                    data = fetchedData;
+                    if (data.length > 0) {
+                        createTableHeaders(Object.keys(data[0]));
+                        displayPage(1);  // Display the first page of the data
+                    } else {
+                        document.getElementById('table-body').innerHTML = '<tr><td colspan="100%">No Data Available</td></tr>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching data:', error);
+                    document.getElementById('table-body').innerHTML = '<tr><td colspan="100%">Error Loading Data</td></tr>';
+                });
+        }
+
+        // Pagination button events
+        prevBtn.addEventListener('click', () => {
+            if (currentPage > 1) {
+                currentPage--;
+                displayPage(currentPage);
+            }
+        });
+
+        nextBtn.addEventListener('click', () => {
+            if (currentPage < Math.ceil(data.length / rowsPerPage)) {
+                currentPage++;
+                displayPage(currentPage);
+            }
+        });
+
+        // Go to page input event
+        goBtn.addEventListener('click', () => {
+            const totalPages = Math.ceil(data.length / rowsPerPage);
+            const inputPage = parseInt(pageInput.value);
+
+            if (inputPage >= 1 && inputPage <= totalPages) {
+                currentPage = inputPage;
+                displayPage(currentPage);
+            } else {
+                alert(`Please enter a page number between 1 and ${totalPages}`);
+            }
+        });
+
+        // Rows per page input event
+        rowsInput.addEventListener('change', () => {
+            rowsPerPage = parseInt(rowsInput.value);
+            currentPage = 1; // Reset to page 1 when rows per page changes
+            displayPage(currentPage);
+        });
+
+        // Create table headers
+        function createTableHeaders(headers) {
+            const tableHead = document.getElementById('table-head');
+            tableHead.innerHTML = ''; // Clear any existing headers
+            const headerRow = document.createElement('tr');
+            
+            headers.forEach(header => {
+                const th = document.createElement('th');
+                th.textContent = header.charAt(0).toUpperCase() + header.slice(1);
+                headerRow.appendChild(th);
+            });
+            tableHead.appendChild(headerRow);
+        }
+
+        // Display the data for the current page
+        function displayPage(page) {
+            const tableBody = document.getElementById('table-body');
+            tableBody.innerHTML = ''; // Clear previous rows
+            
+            const start = (page - 1) * rowsPerPage;
+            const end = Math.min(start + rowsPerPage, data.length);
+            const pageData = data.slice(start, end);
+
+            pageData.forEach(item => {
+                const row = document.createElement('tr');
+                Object.values(item).forEach(value => {
+                    const cell = document.createElement('td');
+                    cell.textContent = value;
+                    row.appendChild(cell);
+                });
+                tableBody.appendChild(row);
+            });
+
+            updatePaginationControls(page);
+        }
+
+        // Update the pagination controls (buttons and page info)
+        function updatePaginationControls(page) {
+            const totalPages = Math.ceil(data.length / rowsPerPage);
+            
+            document.getElementById('page-info').textContent = `of ${totalPages}`;
+            pageInput.value = page;  // Update input to show the current page number
+            
+            document.getElementById('prev-btn').classList.toggle('disabled', page === 1);
+            document.getElementById('next-btn').classList.toggle('disabled', page === totalPages);
+        }
+
+        // Load the default data (Dashboard Data) on page load
+        loadData(currentEndpoint, 'dashboard-data');
+    });
+</script>
+
+</body>
+</html>
