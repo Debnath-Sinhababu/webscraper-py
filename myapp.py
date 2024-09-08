@@ -7,7 +7,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from dotenv import load_dotenv
 import os
 from models import Base, Item, DashboardData, CompanyData, TransportData
-
+import subprocess
 # Load environment variables
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -31,6 +31,10 @@ app = FastAPI()
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+@app.on_event("startup")
+def load_initial_data():
+    # Run the script to insert data from JSON to the database
+    subprocess.run(["python", "process_json.py"])
 # Create a new item
 @app.post("/items/")
 def create_item(name: str, db: Session = Depends(get_db)):
